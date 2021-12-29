@@ -64,32 +64,7 @@ abstract class JoinedTableTest extends BaseTest
      */
     public function testTableInheritance(ReaderInterface $reader): void
     {
-        $tokenizer = new Tokenizer(
-            new TokenizerConfig([
-                'directories' => [__DIR__ . '/../../../../Fixtures/Fixtures16'],
-                'exclude' => [],
-            ])
-        );
-
-        $locator = $tokenizer->classLocator();
-
-        $r = new Registry($this->dbal);
-
-        $schema = (new Compiler())->compile($r, [
-            new Embeddings($locator, $reader),
-            new Entities($locator, $reader),
-            new TableInheritance($reader),
-            new ResetTables(),
-            new MergeColumns($reader),
-            new GenerateRelations(),
-            new RenderTables(),
-            new RenderRelations(),
-            new MergeIndexes($reader),
-            new SyncTables(),
-            new GenerateTypecast(),
-        ]);
-
-        $this->orm = $this->orm->with(new Schema($schema));
+        $this->orm = $this->orm->with(new Schema($this->compile($reader)));
 
         $t = new Transaction($this->orm);
 
@@ -114,5 +89,42 @@ abstract class JoinedTableTest extends BaseTest
         $this->assertSame(15000, $loadedExecutive->bonus);
         $this->assertSame('executive', $loadedExecutive->getType());
         $this->assertNull($loadedExecutive->proxyFieldWithAnnotation);
+    }
+
+    /**
+     * @dataProvider allReadersProvider
+     */
+    public function testAddIndexInJtiTable(ReaderInterface $reader): void
+    {
+        $this->orm = $this->orm->with(new Schema($this->compile($reader)));
+
+        $this->assertTrue($this->dbal->database()->table('buyers')->hasIndex(['index_id']));
+        $this->assertTrue($this->dbal->database()->table('buyers')->index(['index_id'])->isUnique());
+    }
+
+    private function compile(ReaderInterface $reader): array
+    {
+        $tokenizer = new Tokenizer(
+            new TokenizerConfig([
+                'directories' => [__DIR__ . '/../../../../Fixtures/Fixtures16'],
+                'exclude' => [],
+            ])
+        );
+
+        $locator = $tokenizer->classLocator();
+
+        return (new Compiler())->compile(new Registry($this->dbal), [
+            new ResetTables(),
+            new Embeddings($locator, $reader),
+            new Entities($locator, $reader),
+            new TableInheritance($reader),
+            new MergeColumns($reader),
+            new GenerateRelations(),
+            new RenderTables(),
+            new RenderRelations(),
+            new MergeIndexes($reader),
+            new SyncTables(),
+            new GenerateTypecast(),
+        ]);
     }
 }
